@@ -2,46 +2,82 @@
 
 require('DataLayer.php');
 
-function DoEmailWork($debug)
-{
-    //List all customers
-    $e = DataLayer::ListCustomers();
+define('DEBUG', true);
 
-    //loop through list of new customers
-    for ($i = 0; $i < count($e); $i++) {
-        //If the customer is newly registered, one day back in time
-        if ($e[$i]->createdAt > (new DateTime())->modify('-1 day')) {
-            //Add customer to reciever list
-            $to = $e[$i]->email;
-            //Add subject
-            $subject = "Welcome as a new customer";
-            //Send mail from info@cdon.com
-            $from = "info@forbytes.com";
-            //Add body to mail
-            $body = "Hi " . $e[$i]->email . "<br>We would like to welcome you as customer on our site!<br><br>Best Regards,<br>Forbytes Team";
-            if ($debug) {
+class Mailer
+{
+    private $emails = [];
+    private $from = '';
+    private $subject = '';
+    private $body = '';
+
+    public function __construct($emails, $from, $subject, $body)
+    {
+        $this->emails = $emails;
+        $this->from = $from;
+        $this->subject = $subject;
+        $this->body = $body;
+    }
+
+    public function send()
+    {
+        foreach ($this->emails as $to) {
+            if (DEBUG) {
                 //Don't send mails in debug mode, just write the emails in console
-                echo "Send mail to:" . $e[$i]->email . "\r\n";
-            } 
-            else {
-                $result = mail($to, $subject, $body);
+                echo "Send mail to:" . $to . "\r\n";
+            } else {
+                $headers = $this->headers();
+                $result = mail($to, $this->subject, $this->body, $headers);
+
                 if($result === false) {
                     throw new Exception("Cannot send email");
                 }
             }
         }
+
+        return true;
     }
-    //All mails are sent! Success!
-    return true;
-    
+
+    private function headers()
+    {
+        return "From: {$this->from}";
+    }
 }
 
-function DoEmailWork2($debug, $v)
+function DoEmailWork()
+{
+    //List all customers
+    $e = DataLayer::ListCustomers();
+    $emailsList = [];
+
+    //loop through list of new customers
+    foreach ($e as $c) {
+        //If the customer is newly registered, one day back in time
+        if ($c->createdAt > (new DateTime())->modify('-1 day')) {
+            //Add customer to reciever list
+            $emailsList[] = $c->email;
+        }
+    }
+
+    //Add subject
+    $subject = "Welcome as a new customer";
+    //Send mail from info@cdon.com
+    $from = "info@forbytes.com";
+    //Add body to mail
+    $body = "Hi " . $c->email . "<br>We would like to welcome you as customer on our site!<br><br>Best Regards,<br>Forbytes Team";
+
+    $mailer = new Mailer($emailsList, $from, $subject, $body);
+
+    return $mailer->send();
+}
+
+function DoEmailWork2($v)
 {
     //List all customers
     $e = DataLayer::ListCustomers();
     //List all orders
     $f = DataLayer::ListOrders();
+    $emailsList = [];
 
     //loop through list of customers
     foreach ($e as $c) {
@@ -59,44 +95,35 @@ function DoEmailWork2($debug, $v)
         //Send if customer hasn't put order
         if ($send == true) {
             //Add customer to reciever list
-            $to = $c->email;
-            //Add subject
-            $subject = "We miss you as a customer";
-            //Send mail from info@cdon.com
-            $from = "infor@forbytes.com";
-            //Add body to mail
-            $body = "Hi " . $c->email . "<br>We miss you as a customer. Our shop is filled with nice products. Here is a voucher that gives you 50 kr to shop for.<br>Voucher: " . $v . "<br><br>Best Regards,<br>Forbytes Team";
-            if ($debug) {
-                //Don't send mails in debug mode, just write the emails in console
-                echo("Send mail to:" . $c->email . "\r\n");
-            } else {
-                //Send mail
-                $result = mail($to, $subject, $body);
-                if($result === false) {
-                    throw new Exception("Cannot send email");
-                }
-            }
+            $emailsList[] = $c->email;
         }
     }
-    //All mails are sent! Success!
-    return true;
-}
 
-$debug = false;
+    //Add subject
+    $subject = "We miss you as a customer";
+    //Send mail from info@cdon.com
+    $from = "infor@forbytes.com";
+    //Add body to mail
+    $body = "Hi " . $c->email . "<br>We miss you as a customer. Our shop is filled with nice products. Here is a voucher that gives you 50 kr to shop for.<br>Voucher: " . $v . "<br><br>Best Regards,<br>Forbytes Team";
+
+    $mailer = new Mailer($emailsList, $from, $subject, $body);
+
+    return $mailer->send();
+}
 
 //Call the method that do the work for me, I.E. sending the mails
 echo "Send Welcomemail\r\n";
-$success = DoEmailWork($debug);
+$success = DoEmailWork();
 
-if ($debug) {
+if (DEBUG) {
     //Debug mode, always send Comeback mail
     echo("Send Comebackmail\r\n");
-    $success = DoEmailWork2($debug, "ComebackToUs");
+    $success = DoEmailWork2("ComebackToUs");
 } else {
     //Every Sunday run Comeback mail
-    if (date('D', time()) === 'Mon') {
+    if (date('D', time()) === 'Sun') {
         echo("Send Comebackmail\r\n");
-        $success = DoEmailWork2($debug, "ComebackToUs");
+        $success = DoEmailWork2("ComebackToUs");
     }
 }
 
