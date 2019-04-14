@@ -2,7 +2,7 @@
 
 require('DataLayer.php');
 
-define('DEBUG', true);
+define('DEBUG', false);
 
 class Mailer
 {
@@ -28,14 +28,38 @@ class Mailer
         return true;
     }
 
-    private function headers()
+    private function headers($from)
     {
         return "From: {$from}";
     }
 }
 
-class DoEmailWork {
+class Logger
+{
+    public static function info($text)
+    {
+        echo "{$text}\r\n";
+    }
 
+    public static function error($text)
+    {
+        echo "{$text}\r\n";
+    }
+
+    public static function success($text)
+    {
+        echo "{$text}\r\n";
+    }
+}
+
+interface EmailWork
+{
+    public function getBody(...$param);
+    public function run(...$param);
+}
+
+class DoEmailWork implements EmailWork
+{
     private $subject = "Welcome as a new customer";
     private $from = "info@forbytes.com";
 
@@ -46,15 +70,16 @@ class DoEmailWork {
         $this->mailer = $mailer;
     }
 
-    private function getBody($email)
+    public function getBody(...$param)
     {
-        return "Hi " . $email . "<br>We would like to welcome you as customer on our site!<br><br>Best Regards,<br>Forbytes Team";
+        return "Hi " . $param[0] . "<br>We would like to welcome you as customer on our site!<br><br>Best Regards,<br>Forbytes Team";
     }
 
-    public function run()
+    public function run(...$param)
     {
         //List all customers
         $e = DataLayer::ListCustomers();
+        $success = true;
 
         //loop through list of new customers
         foreach ($e as $c) {
@@ -62,14 +87,22 @@ class DoEmailWork {
             if ($c->createdAt > (new DateTime())->modify('-1 day')) {
                 //Add customer to reciever list
                 $body = $this->getBody($c->email);
-                $this->mailer->send($this->from, $c->email, $this->subject, $body);
+                
+                try {
+                    $this->mailer->send($this->from, $c->email, $this->subject, $body);
+                } catch (Exception $e) {
+                    Logger::error($e->getMessage());
+                    $success = false;
+                }
             }
         }
+
+        return $success;
     }
 }
 
-class DoEmailWork2 {
-
+class DoEmailWork2 implements EmailWork
+{
     private $subject = "We miss you as a customer";
     private $from = "info@forbytes.com";
 
@@ -80,17 +113,19 @@ class DoEmailWork2 {
         $this->mailer = $mailer;
     }
 
-    private function getBody($email, $v)
+    public function getBody(...$param)
     {
-        return "Hi " . $email . "<br>We miss you as a customer. Our shop is filled with nice products. Here is a voucher that gives you 50 kr to shop for.<br>Voucher: " . $v . "<br><br>Best Regards,<br>Forbytes Team";
+        return "Hi " . $param[0] . "<br>We miss you as a customer. Our shop is filled with nice products. Here is a voucher that gives you 50 kr to shop for.<br>Voucher: " . $param[1] . "<br><br>Best Regards,<br>Forbytes Team";
     }
 
-    public function run($v)
+    public function run(...$param)
     {
         //List all customers
         $e = DataLayer::ListCustomers();
         //List all orders
         $f = DataLayer::ListOrders();
+
+        $success = true;
 
         //loop through list of customers
         foreach ($e as $c) {
@@ -108,39 +143,45 @@ class DoEmailWork2 {
             //Send if customer hasn't put order
             if ($send == true) {
                 //Add customer to reciever list
-                $body = $this->getBody($c->email, $v);
-                $this->mailer->send($this->from, $c->email, $this->subject, $body);
+                $body = $this->getBody($c->email, $param[0]);
+
+                try {
+                    $this->mailer->send($this->from, $c->email, $this->subject, $body);
+                } catch (Exception $e) {
+                    Logger::error($e->getMessage());
+                    $success = false;
+                }
             }
         }
 
-        return true;
+        return $success;
     }
 }
 
 $mailer = new Mailer();
 
 //Call the method that do the work for me, I.E. sending the mails
-echo "Send Welcomemail\r\n";
+Logger::info("Send Welcomemail");
 $success = (new DoEmailWork($mailer))->run();
 
+Logger::info("Send Comebackmail");
 if (DEBUG) {
     //Debug mode, always send Comeback mail
-    echo("Send Comebackmail\r\n");
     $success = (new DoEmailWork2($mailer))->run("ComebackToUs");
 } else {
     //Every Sunday run Comeback mail
     if (date('D', time()) === 'Sun') {
-        echo("Send Comebackmail\r\n");
         $success = (new DoEmailWork2($mailer))->run("ComebackToUs");
     }
 }
 
 //Check if the sending went OK
 if ($success == true) {
-    echo("All mails are sent, I hope...\r\n");
+    Logger::success("All mails are sent, I hope...");
 }
 //Check if the sending was not going well...
 if ($success == false) {
-    echo("Oops, something went wrong when sending mail (I think...)\r\n");
+    Logger::error("Oops, something went wrong when sending mail (I think...)");
 }
-echo "done\r\n";
+
+Logger::info("done");
