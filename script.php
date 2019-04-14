@@ -2,7 +2,7 @@
 
 require('DataLayer.php');
 
-define('DEBUG', false);
+define('DEBUG', true);
 
 class Mailer
 {
